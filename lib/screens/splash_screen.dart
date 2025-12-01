@@ -21,7 +21,12 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (mounted) {
       if (MockDatabase().isLoggedIn) {
-        context.go('/home');
+        // FORCE NEW SEASON: If no farms, go to Add Farm immediately
+        if (MockDatabase().farms.isEmpty) {
+           context.go('/add-farm');
+        } else {
+           context.go('/home');
+        }
       } else {
         context.go('/login');
       }

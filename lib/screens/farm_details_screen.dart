@@ -16,7 +16,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
   Widget build(BuildContext context) {
     final farm = MockDatabase().farms.firstWhere(
       (f) => f.id == widget.farmId,
-      orElse: () => Farm(id: '0', name: 'Unknown', address: '', crop: '', boundaryPoints: []),
+      orElse: () => Farm(id: '0', name: 'Unknown', address: '', sowingDate: DateTime.now(), crop: '', boundaryPoints: []),
     );
 
     if (farm.id == '0') {

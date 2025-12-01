@@ -18,7 +18,8 @@ class Farm {
   final String id;
   final String name;
   final String address;
-  final String crop; // Added Crop field
+  final String crop;
+  final DateTime sowingDate; // NEW: Added this
   final List<dynamic> boundaryPoints; 
 
   Farm({
@@ -26,10 +27,16 @@ class Farm {
     required this.name, 
     required this.address, 
     required this.crop,
+    required this.sowingDate,
     required this.boundaryPoints
   });
+  
+  // Helper to get current week
+  int get currentWeek {
+    final days = DateTime.now().difference(sowingDate).inDays;
+    return (days / 7).ceil();
+  }
 }
-
 class MockDatabase extends ChangeNotifier {
   static final MockDatabase _instance = MockDatabase._internal();
   factory MockDatabase() => _instance;
@@ -59,6 +66,7 @@ class MockDatabase extends ChangeNotifier {
       name: "Green Valley Plot", 
       address: "Village Rampur", 
       crop: "Wheat",
+      sowingDate: DateTime.now().subtract(const Duration(days: 35)),
       boundaryPoints: [{19.196732, 72.896804}, {19.197000, 72.897000}, {19.198000, 72.896500}, {19.196500, 72.895500}] 
     )
   ];
@@ -94,6 +102,7 @@ class MockDatabase extends ChangeNotifier {
       name: name,
       address: address,
       crop: crop,
+      sowingDate: DateTime.now(), // Defaults to today for new farms
       boundaryPoints: points,
     );
     _farms.add(newFarm);
