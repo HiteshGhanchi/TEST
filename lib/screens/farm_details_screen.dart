@@ -120,7 +120,9 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                     subtitle: "Click Photo",
                     icon: Icons.camera_alt,
                     color: Colors.green.shade700,
-                    onTap: () {},
+                    onTap: () {
+                        context.push('/camera/${widget.farmId}');
+                    }
                   ),
                   _buildActionTile(
                     title: "Damage Report",
