@@ -6,17 +6,17 @@ final Color _primaryGreen = Colors.green.shade700;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const CropClaimApp());
+  runApp(const CropicApp());
 }
 
-class CropClaimApp extends StatelessWidget {
-  const CropClaimApp({super.key});
+class CropicApp extends StatelessWidget {
+  const CropicApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
       routerConfig: router,
-      title: 'Crop Claim App',
+      title: 'CROPIC',
       theme: ThemeData(
         // Use a standard green primary color theme
         primarySwatch: Colors.green,
