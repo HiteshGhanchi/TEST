@@ -1,12 +1,10 @@
-// lib/screens/add_farm_screen.dart
-
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
-import '../data/mock_database.dart';
+import '../api/api_client.dart'; // Import ApiClient
 
 class AddFarmScreen extends StatefulWidget {
   final String accessToken;
@@ -19,18 +17,20 @@ class AddFarmScreen extends StatefulWidget {
 class _AddFarmScreenState extends State<AddFarmScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  // Removed Address Controller
+  final _addressController = TextEditingController();
   
-  String? _selectedCrop;
+  String? _selectedCropId;
   final List<LatLng> _polygonPoints = [];
   final MapController _mapController = MapController();
 
   bool _isLoading = false;
+  late Future<List<Map<String, dynamic>>> _cropsFuture;
   LatLng _initialCenter = const LatLng(20.5937, 78.9629);
 
   @override
   void initState() {
     super.initState();
+    _cropsFuture = ApiClient().getCrops();
     _determinePosition();
   }
 
@@ -43,8 +43,7 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
     }
-    if (permission == LocationPermission.deniedForever) return;
-
+    
     try {
       Position position = await Geolocator.getCurrentPosition();
       if (mounted) {
@@ -59,14 +58,15 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
   }
 
   void _handleMapTap(TapPosition tapPosition, LatLng latLng) {
-    if (_polygonPoints.length < 10) {
+    if (_polygonPoints.length < 20) {
       setState(() => _polygonPoints.add(latLng));
     }
   }
 
   void _submitFarm() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedCrop == null) {
+    
+    if (_selectedCropId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a crop")));
       return;
     }
@@ -77,30 +77,30 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
 
     setState(() => _isLoading = true);
 
-    final boundaryData = _polygonPoints.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList();
-    
-    // Auto-generate a location string since we removed the input
-    final String autoLocation = "Lat: ${_polygonPoints[0].latitude.toStringAsFixed(2)}, Lng: ${_polygonPoints[0].longitude.toStringAsFixed(2)}";
+    try {
+      await ApiClient().createFarm(
+        name: _nameController.text.trim(),
+        address: _addressController.text.trim(),
+        boundaryPoints: _polygonPoints,
+        cropId: _selectedCropId!,
+      );
 
-    MockDatabase().addFarm(
-      _nameController.text.trim(),
-      autoLocation, // Passing auto-generated location
-      _selectedCrop!,
-      boundaryData
-    );
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Farm Added!")));
-      context.go('/home');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Farm Added Successfully!")));
+        // Return to previous screen and signal success so callers can refresh
+        context.pop(true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final crops = MockDatabase().availableCrops;
-
     return Scaffold(
       extendBodyBehindAppBar: true, 
       appBar: AppBar(
@@ -111,8 +111,8 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
           margin: const EdgeInsets.all(8),
           decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
           child: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.go('/home'),
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => context.pop(),
           ),
         ),
       ),
@@ -129,14 +129,13 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                // FIX: Use valid package name to avoid OSM Block
-                userAgentPackageName: 'com.example.myapp', 
+                userAgentPackageName: 'com.example.cropic',
               ),
               PolygonLayer(
                 polygons: [
                   Polygon(
                     points: _polygonPoints,
-                    color: Colors.green.withOpacity(0.4),
+                    color: Colors.green.withValues(alpha: 0.4),
                     borderColor: Colors.green,
                     borderStrokeWidth: 3,
                     isFilled: true,
@@ -176,7 +175,7 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
             ),
           ),
 
-          // --- 3. Bottom Form Panel (Address Removed) ---
+          // --- 3. Bottom Form Panel ---
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -208,20 +207,65 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    DropdownButtonFormField<String>(
-                      value: _selectedCrop,
+                     TextFormField(
+                      controller: _addressController,
                       decoration: InputDecoration(
-                        labelText: 'Select Crop',
+                        labelText: 'Address',
                         filled: true,
                         fillColor: Colors.grey.shade50,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                        prefixIcon: const Icon(Icons.grass, color: Colors.blue),
+                        prefixIcon: const Icon(Icons.location_on_outlined, color: Colors.orange),
                       ),
-                      items: crops.map((crop) => DropdownMenuItem(
-                        value: crop,
-                        child: Text(crop),
-                      )).toList(),
-                      onChanged: (val) => setState(() => _selectedCrop = val),
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 12),
+
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _cropsFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const SizedBox(
+                            height: 50,
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text("Error loading crops: ${snapshot.error}", style: const TextStyle(color: Colors.red)),
+                          );
+                        }
+
+                        final crops = snapshot.data ?? [];
+                        if (crops.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: const Text("No crops available", style: TextStyle(color: Colors.orange)),
+                          );
+                        }
+
+                        return DropdownButtonFormField<String>(
+                          initialValue: _selectedCropId,
+                          decoration: InputDecoration(
+                            labelText: 'Select Crop',
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            prefixIcon: const Icon(Icons.grass, color: Colors.blue),
+                          ),
+                          items: crops.map((crop) {
+                            final id = crop['id']?.toString() ?? '';
+                            final name = crop['name']?.toString() ?? 'Unknown Crop';
+                            return DropdownMenuItem<String>(
+                              value: id,
+                              child: Text(name),
+                            );
+                          }).toList(),
+                          onChanged: (val) => setState(() => _selectedCropId = val),
+                          validator: (v) => v == null || v.isEmpty ? 'Please select a crop' : null,
+                        );
+                      },
                     ),
 
                     const SizedBox(height: 20),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../data/mock_database.dart'; // Import MockDB
+import '../../api/api_client.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,37 +13,56 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
   
-  bool _isOtpSent = false; // Toggle between Phone Input and OTP Input
+  bool _isOtpSent = false;
   bool _isLoading = false;
+  String? _currentSessionId;
 
-  void _handleLogin() async {
+  // 1. Request OTP
+  void _handleGetOtp() async {
+    final phone = _phoneController.text.trim();
+    if (phone.length < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter valid phone number")));
+      return;
+    }
+
     setState(() => _isLoading = true);
 
-    if (!_isOtpSent) {
-      // Step 1: Simulate Sending OTP
-      await Future.delayed(const Duration(seconds: 1)); // Fake network call
-      setState(() {
-        _isOtpSent = true;
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("OTP Sent: 1234")),
-      );
-    } else {
-      // Step 2: Verify OTP
-      bool success = await MockDatabase().login(
-        _phoneController.text, 
-        _otpController.text
-      );
+    try {
+      final sessionId = await ApiClient().requestOtp(phone);
+      if (mounted) {
+        setState(() {
+          _currentSessionId = sessionId;
+          _isOtpSent = true;
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("OTP Sent! Check your device.")));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
+      }
+    }
+  }
 
-      setState(() => _isLoading = false);
+  // 2. Verify OTP
+  void _handleVerifyOtp() async {
+    final otp = _otpController.text.trim();
+    if (otp.isEmpty || _currentSessionId == null) return;
 
-      if (success && mounted) {
+    setState(() => _isLoading = true);
+
+    try {
+      await ApiClient().verifyOtp(_currentSessionId!, otp);
+      
+      if (mounted) {
+        // Navigate to Home upon success
         context.go('/home');
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Invalid OTP (Try 1234)")),
-        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Invalid OTP")));
       }
     }
   }
@@ -58,6 +77,8 @@ class _LoginScreenState extends State<LoginScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const Icon(Icons.eco, size: 80, color: Colors.green),
+            const SizedBox(height: 20),
             const Text(
               "Welcome to Cropic",
               textAlign: TextAlign.center,
@@ -65,18 +86,28 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 40),
             
-            // Toggle Inputs based on state
-            if (!_isOtpSent)
+            if (!_isOtpSent) ...[
               TextField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
-                  labelText: "Phone Number",
+                  labelText: "Phone Number (+91...)",
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.phone),
                 ),
-              )
-            else
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _handleGetOtp,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade700,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: _isLoading 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("Get OTP", style: TextStyle(fontSize: 18, color: Colors.white)),
+              ),
+            ] else ...[
               TextField(
                 controller: _otpController,
                 keyboardType: TextInputType.number,
@@ -86,27 +117,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icon(Icons.lock),
                 ),
               ),
-
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _handleLogin,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green.shade700,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _handleVerifyOtp,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade700,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: _isLoading 
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("Verify & Login", style: TextStyle(fontSize: 18, color: Colors.white)),
               ),
-              child: _isLoading 
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Text(
-                    _isOtpSent ? "Verify & Login" : "Get OTP",
-                    style: const TextStyle(fontSize: 18, color: Colors.white),
-                  ),
-            ),
-            
-            if (_isOtpSent)
               TextButton(
                 onPressed: () => setState(() => _isOtpSent = false),
                 child: const Text("Change Phone Number"),
               )
+            ]
           ],
         ),
       ),

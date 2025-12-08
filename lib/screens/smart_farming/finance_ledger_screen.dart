@@ -7,7 +7,6 @@ final Color _incomeGreen = Colors.green.shade600;
 class FinanceLedgerScreen extends StatelessWidget {
   const FinanceLedgerScreen({super.key});
 
-  // Mock transaction data
   final List<Map<String, dynamic>> _transactions = const [
     {'title': 'Corn Seed Purchase', 'date': 'Oct 28, 2023', 'amount': -1250.00, 'icon': Icons.agriculture, 'color': Colors.red},
     {'title': 'Soybean Sale - Lot A', 'date': 'Oct 26, 2023', 'amount': 7800.00, 'icon': Icons.grain, 'color': Colors.green},
@@ -25,7 +24,7 @@ class FinanceLedgerScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withAlpha(26), // Updated from withOpacity
+            color: Colors.grey.withAlpha(26), 
             spreadRadius: 1,
             blurRadius: 10,
             offset: const Offset(0, 5),
@@ -144,6 +143,7 @@ class FinanceLedgerScreen extends StatelessWidget {
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
                             value: 'This Month',
+                            isExpanded: true, // FIXED: Added isExpanded
                             items: <String>['This Month', 'Last Month', 'This Year']
                                 .map<DropdownMenuItem<String>>((String value) {
                               return DropdownMenuItem<String>(
@@ -152,7 +152,13 @@ class FinanceLedgerScreen extends StatelessWidget {
                                   children: [
                                     Icon(Icons.calendar_today, size: 18, color: _primaryGreen),
                                     const SizedBox(width: 8),
-                                    Text(value),
+                                    // FIXED: Wrap text in Flexible to prevent overflow
+                                    Flexible(
+                                      child: Text(
+                                        value,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               );
@@ -202,7 +208,7 @@ class FinanceLedgerScreen extends StatelessWidget {
             ),
           ),
           
-          // Floating Action Button for New Transaction
+          // Floating Action Button
           Align(
             alignment: Alignment.bottomRight,
             child: Padding(
@@ -232,9 +238,7 @@ class FinanceLedgerScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           side: isSelected ? BorderSide.none : BorderSide(color: Colors.grey.shade300),
         ),
-        onSelected: (selected) {
-          // Implement tab selection logic
-        },
+        onSelected: (selected) {},
       ),
     );
   }

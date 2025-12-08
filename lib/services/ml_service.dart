@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:io';
 import 'dart:math';
 import 'package:image/image.dart' as img;
@@ -10,7 +9,6 @@ class MLService {
   MLService._internal();
 
   Interpreter? _interpreter;
-  List<String>? _labels;
 
   bool get isModelLoaded => _interpreter != null;
 
@@ -20,9 +18,8 @@ class MLService {
       // Ensure you add 'assets/model.tflite' and 'assets/labels.txt' to pubspec
       _interpreter = await Interpreter.fromAsset('assets/model.tflite');
       // _labels = await FileUtil.loadLabels('assets/labels.txt'); // If you have labels
-      print("ML Model Loaded Successfully");
     } catch (e) {
-      print("ML Model not found (using Mock Mode): $e");
+      // Silently fail - using Mock Mode
     }
   }
 
@@ -63,7 +60,6 @@ class MLService {
       return output[0][0]; // Return confidence
 
     } catch (e) {
-      print("Inference Error: $e");
       return 0.5; // Neutral score on error
     }
   }

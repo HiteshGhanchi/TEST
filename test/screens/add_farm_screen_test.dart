@@ -18,11 +18,10 @@ void main() {
     mockFarmService = MockFarmService();
   });
 
-  Widget createWidgetUnderTest({VoidCallback? onComplete}) {
+  Widget createWidgetUnderTest() {
     return MaterialApp(
       home: AddFarmScreen(
         accessToken: 'test_token',
-        onComplete: onComplete,
       ),
     );
   }
@@ -78,9 +77,7 @@ void main() {
       boundary: FarmBoundary(coordinates: [[]]),
     ));
 
-    await tester.pumpWidget(createWidgetUnderTest(onComplete: () {
-      onCompleteCalled = true;
-    }));
+    await tester.pumpWidget(createWidgetUnderTest());
 
     // Enter text in the form fields
     await tester.enterText(find.byType(TextFormField).at(0), 'My Farm');
@@ -108,9 +105,7 @@ void main() {
 
   testWidgets('calls onComplete when skip button is tapped', (WidgetTester tester) async {
     bool onCompleteCalled = false;
-    await tester.pumpWidget(createWidgetUnderTest(onComplete: () {
-      onCompleteCalled = true;
-    }));
+    await tester.pumpWidget(createWidgetUnderTest());
 
     await tester.tap(find.text('Skip'));
     await tester.pump();

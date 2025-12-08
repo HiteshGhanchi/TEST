@@ -14,61 +14,56 @@ class AdvisoryChatScreen extends StatelessWidget {
     {'sender': 'bot', 'text': 'The average Mandi price for Soybeans (October 2024) in your region is ₹4,850/Quintal. This is based on real-time e-NAM data.'},
   ];
 
-  Widget _buildChatBubble(Map<String, dynamic> message) {
+  Widget _buildChatBubble(BuildContext context, Map<String, dynamic> message) {
     final bool isBot = message['sender'] == 'bot';
     final Color bubbleColor = isBot ? Colors.grey.shade200 : _userBubbleColor;
     final Color textColor = isBot ? Colors.black87 : Colors.white;
-    final Alignment alignment = isBot ? Alignment.centerLeft : Alignment.centerRight;
     
+    // FIXED: Use dynamic width (75% of screen width) to prevent overflow
+    final double maxWidth = MediaQuery.of(context).size.width * 0.75; 
+
     // Check for thinking state
     if (message['isThinking'] == true) {
-      return Align(
-        alignment: alignment,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          padding: const EdgeInsets.all(12.0),
-          constraints: const BoxConstraints(maxWidth: 250),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(16).copyWith(
-              topLeft: isBot ? Radius.zero : const Radius.circular(16),
-              topRight: isBot ? const Radius.circular(16) : Radius.zero,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(message['text'] as String, style: TextStyle(color: textColor, fontStyle: FontStyle.italic)),
-              const SizedBox(width: 8),
-              const SizedBox(
-                width: 10,
-                height: 10,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-
-    return Align(
-      alignment: alignment,
-      child: Container(
+      return Container(
         margin: const EdgeInsets.symmetric(vertical: 8.0),
         padding: const EdgeInsets.all(12.0),
-        constraints: const BoxConstraints(maxWidth: 300),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         decoration: BoxDecoration(
-          color: bubbleColor,
+          color: Colors.grey.shade200,
           borderRadius: BorderRadius.circular(16).copyWith(
             topLeft: isBot ? Radius.zero : const Radius.circular(16),
             topRight: isBot ? const Radius.circular(16) : Radius.zero,
           ),
         ),
-        child: Text(
-          message['text'] as String,
-          style: TextStyle(color: textColor),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(message['text'] as String, style: TextStyle(color: textColor, fontStyle: FontStyle.italic)),
+            const SizedBox(width: 8),
+            const SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ],
         ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.all(12.0),
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      decoration: BoxDecoration(
+        color: bubbleColor,
+        borderRadius: BorderRadius.circular(16).copyWith(
+          topLeft: isBot ? Radius.zero : const Radius.circular(16),
+          topRight: isBot ? const Radius.circular(16) : Radius.zero,
+        ),
+      ),
+      child: Text(
+        message['text'] as String,
+        style: TextStyle(color: textColor),
       ),
     );
   }
@@ -110,22 +105,25 @@ class AdvisoryChatScreen extends StatelessWidget {
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final message = _messages[index];
+                final bool isBot = message['sender'] == 'bot';
+                
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: message['sender'] == 'bot' ? MainAxisAlignment.start : MainAxisAlignment.end,
+                  mainAxisAlignment: isBot ? MainAxisAlignment.start : MainAxisAlignment.end,
                   children: [
-                    if (message['sender'] == 'bot') 
+                    if (isBot) 
                       const CircleAvatar(
                         backgroundColor: Colors.grey,
-                        child: Icon(Icons.android, size: 24, color: Colors.white), // AgriBot Icon
+                        child: Icon(Icons.android, size: 24, color: Colors.white), 
                       ),
                     const SizedBox(width: 8),
-                    _buildChatBubble(message),
+                    // Bubble is now properly constrained by _buildChatBubble
+                    _buildChatBubble(context, message),
                     const SizedBox(width: 8),
-                    if (message['sender'] == 'user') 
+                    if (!isBot) 
                       const CircleAvatar(
                         backgroundColor: Colors.grey,
-                        child: Icon(Icons.person, size: 24, color: Colors.white), // User Icon
+                        child: Icon(Icons.person, size: 24, color: Colors.white),
                       ),
                   ],
                 );
@@ -163,7 +161,6 @@ class AdvisoryChatScreen extends StatelessWidget {
             ),
             child: Row(
               children: [
-                // Voice Input Button
                 Container(
                   padding: const EdgeInsets.all(8.0),
                   decoration: BoxDecoration(
@@ -173,7 +170,6 @@ class AdvisoryChatScreen extends StatelessWidget {
                   child: Icon(Icons.mic_none, color: _primaryGreen, size: 28),
                 ),
                 const SizedBox(width: 8),
-                // Text Input
                 const Expanded(
                   child: TextField(
                     decoration: InputDecoration(
@@ -183,7 +179,6 @@ class AdvisoryChatScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Send Button
                 Container(
                   width: 48,
                   height: 48,

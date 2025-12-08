@@ -1,238 +1,178 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:exif/exif.dart';
-import '../data/capture_data.dart';
-import 'verification_result_screen.dart'; // Next screen
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../services/ml_service.dart';
+import '../data/crop_standards.dart';
+import '../data/mock_database.dart';
 
-class CameraScreen extends StatefulWidget {
-  final CameraDescription camera;
-
-  const CameraScreen({super.key, required this.camera});
+class SmartCameraScreen extends StatefulWidget {
+  final String farmId;
+  const SmartCameraScreen({super.key, required this.farmId});
 
   @override
-  State<CameraScreen> createState() => _CameraScreenState();
+  State<SmartCameraScreen> createState() => _SmartCameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> {
-  late CameraController _controller;
-  late Future<void> _initializeControllerFuture;
-  Position? _currentPosition;
-  bool _isLocating = false;
-
+class _SmartCameraScreenState extends State<SmartCameraScreen> {
+  CameraController? _controller;
+  bool _isProcessing = false;
+  
+  // Session State
+  late List<PhotoRequirement> _requirements;
+  int _currentReqIndex = 0;
+  int _photosTakenInCurrentReq = 0;
+  
   @override
   void initState() {
     super.initState();
-    _controller = CameraController(
-      widget.camera,
-      ResolutionPreset.high,
-      enableAudio: false,
-    );
-    _initializeControllerFuture = _controller.initialize();
-    _startHighAccuracyLocation();
+    _initCamera();
+    _loadRequirements();
+  }
+  
+  void _loadRequirements() {
+    final farm = MockDatabase().farms.firstWhere((f) => f.id == widget.farmId);
+    final stage = CropStandard.getStage(farm.currentWeek);
+    _requirements = CropStandard.getRequirements(stage);
   }
 
-  // --- LOCATION & PERMISSIONS ---
-  Future<void> _startHighAccuracyLocation() async {
-    setState(() => _isLocating = true);
+  Future<void> _initCamera() async {
+    final cameras = await availableCameras();
+    _controller = CameraController(cameras.first, ResolutionPreset.high, enableAudio: false);
+    await _controller!.initialize();
+    if (mounted) setState(() {});
+  }
 
-    // 1. Check permissions and services
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        // Handle denied state for user guidance
-        setState(() => _isLocating = false);
-        return;
-      }
-    }
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
 
-    // 2. Get high-accuracy position right away
+  Future<void> _capturePhoto() async {
+    if (_controller == null || _isProcessing) return;
+
+    setState(() => _isProcessing = true);
+
     try {
-      final LocationSettings locationSettings = LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
-      );
-      _currentPosition = await Geolocator.getCurrentPosition(
-        locationSettings: locationSettings,
-      );
+      final image = await _controller!.takePicture();
+      final req = _requirements[_currentReqIndex];
+
+      // --- SMART VALIDATION (Simulated) ---
+      // 1. Geo-tag Check (Mocked)
+      // 2. Blur Check (Mocked)
+      // 3. Content Check (Wide vs Macro)
+      double confidence = await MLService().validateCropImage(image.path);
+      
+      // Specific check based on requirement type
+      bool isValid = confidence > 0.7;
+      // If Macro is required but confidence is low (simulating wide shot), fail
+      if (req.isMacro && confidence < 0.6) isValid = false; 
+
+      if (isValid) {
+        _photosTakenInCurrentReq++;
+        
+        // Check if we need to move to next requirement
+        if (_photosTakenInCurrentReq >= req.count) {
+          _currentReqIndex++;
+          _photosTakenInCurrentReq = 0;
+        }
+        
+        // Check if session is complete
+        if (_currentReqIndex >= _requirements.length) {
+           _finishSession();
+        } else {
+           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Photo Saved! Next one...")));
+        }
+      } else {
+         _showErrorDialog("Poor Quality", "Please ensure the image is clear and matches the guide (${req.isMacro ? 'Close-up' : 'Wide View'}).");
+      }
+
     } catch (e) {
-      // Handle location fetch errors
-      _showErrorDialog(
-        "Location Error",
-        "Could not get device GPS. Ensure location services are on.",
-      );
+      _showErrorDialog("Error", e.toString());
     } finally {
-      setState(() => _isLocating = false);
+      setState(() => _isProcessing = false);
     }
   }
 
-  // --- CAPTURE & VERIFICATION ---
-  Future<void> _onCapture() async {
-    if (_isLocating || _currentPosition == null) {
-      _showErrorDialog(
-        "Location Required",
-        "Acquiring high-accuracy GPS. Please wait a moment.",
-      );
-      return;
-    }
-
-    try {
-      await _initializeControllerFuture;
-      final XFile photo = await _controller.takePicture();
-      final File imageFile = File(photo.path);
-
-      // 1. Extract EXIF data
-      final Map<String, IfdTag> tags = await readExifFromBytes(
-        await imageFile.readAsBytes(),
-      );
-      final GpsInfo? exifGps = tags.containsKey('GPS GPSLatitude')
-          ? extractGpsInfo(tags)
-          : null;
-      final DateTime? exifDT = tags.containsKey('Image DateTime')
-          ? DateTime.tryParse(
-              tags['Image DateTime']!.values
-                  .toString()
-                  .replaceFirst(':', '')
-                  .replaceAll(':', '-')
-                  .trim(),
-            )
-          : null;
-
-      // 2. Create Capture Data Object
-      final CaptureData data = CaptureData(
-        photoFile: photo,
-        captureLat: _currentPosition!.latitude,
-        captureLon: _currentPosition!.longitude,
-        exifLat: exifGps?.latitude,
-        exifLon: exifGps?.longitude,
-        exifTimestamp: exifDT,
-      );
-
-      // 3. Client-Side EXIF check (MANDATORY)
-      if (!data.isExifDataPresent) {
-        _showErrorDialog(
-          "Location Missing in Photo",
-          "The photo file is missing location data. Please enable 'Geotagging' or 'Camera Location' in your device camera settings and retry.",
-        );
-        await imageFile.delete(); // Clean up local file
-        return;
-      }
-
-      // 4. Navigate to the next screen for upload
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => VerificationResultScreen(captureData: data),
-        ),
-      );
-    } catch (e) {
-      _showErrorDialog(
-        "Capture Failed",
-        "An error occurred during capture: $e",
-      );
-    }
-  }
-
-  // --- UI & Helpers ---
-  void _showErrorDialog(String title, String content) {
+  void _finishSession() {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
+        title: const Text("Weekly Update Complete"),
+        content: const Text("Great job! All samples have been collected and geotagged."),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text("OK"),
-          ),
+            onPressed: () {
+              context.go('/home');
+            },
+            child: const Text("Done"),
+          )
         ],
       ),
     );
   }
 
-  // Minimal GPS extraction helper (needs more robust date/time handling for production)
-  GpsInfo? extractGpsInfo(Map<String, IfdTag> tags) {
-    // Simplified logic: production code needs robust conversion of Rational values
-    // This is often complex; relying on server-side exifr is safer, but we need the client check
-    // For now, we only check for the presence of the tags.
-    // A fully robust implementation is verbose. We assume tags[key].values are present for the check.
-    if (tags.containsKey('GPS GPSLatitude') &&
-        tags.containsKey('GPS GPSLongitude')) {
-      // Mock data extraction for demo purposes, assume location is present if tags are.
-      return GpsInfo(latitude: 0.0, longitude: 0.0);
-    }
-    return null;
+  void _showErrorDialog(String title, String msg) {
+    showDialog(context: context, builder: (ctx) => AlertDialog(title: Text(title), content: Text(msg), actions: [TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text("OK"))]));
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_controller == null || !_controller!.value.isInitialized) {
+      return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator()));
+    }
+
+    // Current Instruction
+    if (_currentReqIndex >= _requirements.length) return Container(); // Session over
+    final req = _requirements[_currentReqIndex];
+    final progress = "Step ${_currentReqIndex + 1}/${_requirements.length} • Photo ${_photosTakenInCurrentReq + 1}/${req.count}";
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Capture Farm Photo')),
-      body: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            return Stack(
-              children: [
-                CameraPreview(_controller),
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        _isLocating
-                            ? '🛰️ Getting high-accuracy GPS...'
-                            : _currentPosition != null
-                            ? '✅ GPS Locked. Accuracy: ${_currentPosition!.accuracy.toStringAsFixed(1)}m'
-                            : '❌ Location Unavailable. Check settings.',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 40.0),
-                    child: FloatingActionButton(
-                      onPressed: _onCapture,
-                      child: const Icon(Icons.camera_alt, size: 36),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          } else {
-            return const Center(child: CircularProgressIndicator());
-          }
-        },
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Center(child: CameraPreview(_controller!)),
+          
+          // --- OVERLAY GUIDES ---
+          if (req.isMacro)
+             Center(child: Container(width: 200, height: 200, decoration: BoxDecoration(border: Border.all(color: Colors.yellow, width: 2), borderRadius: BorderRadius.circular(12))))
+          else
+             // Grid for wide shots
+             Column(children: [Expanded(child: Container(decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.3)))))), Expanded(child: Container())]),
+
+          // --- BOTTOM INSTRUCTIONS ---
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.transparent, Colors.black87],
+                  begin: Alignment.topCenter, end: Alignment.bottomCenter
+                )
+              ),
+              child: Column(
+                children: [
+                  Text(req.label.toUpperCase(), style: const TextStyle(color: Colors.yellow, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  const SizedBox(height: 8),
+                  Text(req.instruction, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  Text(progress, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                  const SizedBox(height: 24),
+                  FloatingActionButton(
+                    onPressed: _isProcessing ? null : _capturePhoto,
+                    backgroundColor: Colors.white,
+                    child: _isProcessing 
+                      ? const CircularProgressIndicator() 
+                      : Icon(Icons.camera, color: Colors.green.shade800, size: 32),
+                  )
+                ],
+              ),
+            ),
+          )
+        ],
       ),
     );
   }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-}
-
-class GpsInfo {
-  final double latitude;
-  final double longitude;
-  GpsInfo({required this.latitude, required this.longitude});
 }
