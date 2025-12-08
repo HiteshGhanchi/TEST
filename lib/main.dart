@@ -1,12 +1,22 @@
-
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:provider/provider.dart';
 import 'package:myapp/router.dart';
+import 'package:myapp/I10n/app_localizations.dart';
+import 'package:myapp/providers/locale_provider.dart';
 
 final Color _primaryGreen = Colors.green.shade700;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const CropicApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LocaleProvider()),
+      ],
+      child: const CropicApp(),
+    ),
+  );
 }
 
 class CropicApp extends StatelessWidget {
@@ -14,9 +24,22 @@ class CropicApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localeProvider = Provider.of<LocaleProvider>(context);
+
     return MaterialApp.router(
       routerConfig: router,
       title: 'CROPIC',
+      locale: localeProvider.locale,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en', ''),
+        Locale('hi', ''),
+      ],
       theme: ThemeData(
         // Use a standard green primary color theme
         primarySwatch: Colors.green,

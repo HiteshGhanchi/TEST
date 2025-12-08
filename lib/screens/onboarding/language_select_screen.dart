@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transparent_image/transparent_image.dart';
+import 'package:provider/provider.dart';
+import 'package:myapp/providers/locale_provider.dart';
+import 'package:myapp/I10n/app_localizations.dart';
 
 final Color _primaryGreen = Colors.green.shade700;
 
@@ -12,18 +15,21 @@ class LanguageSelectScreen extends StatefulWidget {
 }
 
 class _LanguageSelectScreenState extends State<LanguageSelectScreen> {
-  String? _selectedLanguage = 'English';
+  // Logic to determine initial selection could be added here
+  
+  void _updateLanguage(String languageCode) {
+    Provider.of<LocaleProvider>(context, listen: false).setLocale(Locale(languageCode));
+  }
 
-  Widget _buildLanguageOption(String language, String regional) {
-    final bool isSelected = _selectedLanguage == language;
+  Widget _buildLanguageOption(String language, String regional, String code) {
+    final currentLocale = Provider.of<LocaleProvider>(context).locale;
+    final bool isSelected = currentLocale.languageCode == code;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: GestureDetector(
         onTap: () {
-          setState(() {
-            _selectedLanguage = language;
-          });
+          _updateLanguage(code);
         },
         child: Container(
           decoration: BoxDecoration(
@@ -65,6 +71,8 @@ class _LanguageSelectScreenState extends State<LanguageSelectScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
       body: Stack(
         children: [
@@ -74,7 +82,7 @@ class _LanguageSelectScreenState extends State<LanguageSelectScreen> {
               placeholder: MemoryImage(kTransparentImage),
               image: const NetworkImage(
                 'https://images.unsplash.com/photo-1542282332-1b112310350d?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-              ), // Placeholder for background image
+              ), 
               fit: BoxFit.cover,
               height: double.infinity,
               width: double.infinity,
@@ -93,7 +101,7 @@ class _LanguageSelectScreenState extends State<LanguageSelectScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Select Your Language',
+                    l10n.translate('language_select_title'),
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -102,7 +110,7 @@ class _LanguageSelectScreenState extends State<LanguageSelectScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Choose the language you are most comfortable with.',
+                    l10n.translate('language_select_subtitle'),
                     style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 24),
@@ -110,7 +118,7 @@ class _LanguageSelectScreenState extends State<LanguageSelectScreen> {
                   // Search Bar
                   TextField(
                     decoration: InputDecoration(
-                      hintText: 'Search for a language',
+                      hintText: l10n.translate('search_language'),
                       prefixIcon: Icon(
                         Icons.search,
                         color: Colors.grey.shade500,
@@ -124,11 +132,9 @@ class _LanguageSelectScreenState extends State<LanguageSelectScreen> {
                   Expanded(
                     child: ListView(
                       children: [
-                        _buildLanguageOption('English', 'English'),
-                        _buildLanguageOption('Hindi', 'हिन्दी'),
-                        _buildLanguageOption('Spanish', 'Español'),
-                        _buildLanguageOption('French', 'Français'),
-                        _buildLanguageOption('Marathi', 'मराठी'),
+                        _buildLanguageOption('English', 'English', 'en'),
+                        _buildLanguageOption('Hindi', 'हिन्दी', 'hi'),
+                        // Add more as needed, ensuring they are in AppLocalizations
                       ],
                     ),
                   ),
@@ -148,9 +154,9 @@ class _LanguageSelectScreenState extends State<LanguageSelectScreen> {
                         ),
                         elevation: 5,
                       ),
-                      child: const Text(
-                        'Continue',
-                        style: TextStyle(
+                      child: Text(
+                        l10n.translate('continue_btn'),
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,

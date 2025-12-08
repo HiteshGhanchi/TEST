@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../I10n/app_localizations.dart';
 
 final Color _primaryGreen = Colors.lightGreen.shade500;
 
@@ -44,7 +45,6 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
       context.go('/set-password', extra: {'accessToken': mockAccessToken});
     }
 
-
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -54,8 +54,10 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Verify OTP')),
+      appBar: AppBar(title: Text(l10n.translate('verify_otp_title'))),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -64,7 +66,7 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Enter the OTP sent to ${widget.phone}',
+                '${l10n.translate('enter_otp_sent_to')} ${widget.phone}',
                 style: Theme.of(context).textTheme.headlineSmall,
                 textAlign: TextAlign.center,
               ),
@@ -92,7 +94,7 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('Verify', style: TextStyle(fontSize: 18, color: Colors.white)),
+                      : Text(l10n.translate('verify_btn'), style: const TextStyle(fontSize: 18, color: Colors.white)),
                 ),
               ),
             ],
