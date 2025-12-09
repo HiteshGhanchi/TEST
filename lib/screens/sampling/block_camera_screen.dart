@@ -1,6 +1,8 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../api/api_client.dart';
+import '../../data/capture_data.dart';
 
 class BlockCameraScreen extends StatefulWidget {
   const BlockCameraScreen({super.key});
@@ -35,9 +37,28 @@ class _BlockCameraScreenState extends State<BlockCameraScreen> {
 
     try {
       final image = await _controller!.takePicture();
-      
-      // TODO: Call your ApiClient().presignUpload(...) here immediately
-      
+
+      // Create a minimal CaptureData and call presignUpload immediately.
+      // NOTE: Replace captureLat/captureLon with real GPS when available.
+      final capture = CaptureData(
+        photoFile: image,
+        captureLat: 0.0,
+        captureLon: 0.0,
+        exifLat: null,
+        exifLon: null,
+        exifTimestamp: null,
+      );
+
+      try {
+        final presign = await ApiClient().presignUpload(capture);
+        // Persist returned IDs on the CaptureData for later upload
+        if (presign is Map<String, dynamic>) {
+          capture.uploadId = presign['uploadId']?.toString();
+          capture.signedUploadParams = presign['uploadParams'] is Map ? Map<String, dynamic>.from(presign['uploadParams']) : null;
+        }
+      } catch (e) {
+        // Ignore presign failure here but log and continue UI flow
+      }
       if (_currentStep == CaptureStep.fieldView) {
         // Transition to Step 2
         setState(() {
@@ -127,7 +148,7 @@ class HolePunchPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black.withOpacity(0.6); // Darken opacity
+    final paint = Paint()..color = Colors.black.withAlpha((0.6 * 255).round()); // Darken opacity
     
     // Create a path for the whole screen
     final backgroundPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));

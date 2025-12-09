@@ -1,3 +1,4 @@
+import 'dart:ui'; // Required for ImageFilter (Blur)
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../api/api_client.dart';
@@ -14,6 +15,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Farm>> _farmsFuture;
   Map<String, dynamic>? _userProfile;
+
+  // Asset path constant
+  final String _wheatImage = 'assets/wheat1.jpg';
 
   @override
   void initState() {
@@ -34,9 +38,37 @@ class _HomeScreenState extends State<HomeScreen> {
         _farmsFuture = ApiClient().getFarms();
       });
       await _farmsFuture;
-      if (mounted && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Farms refreshed')));
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Farms refreshed')));
+      }
     } catch (e) {
-      if (mounted && context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Refresh failed: ${e.toString()}')));
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Refresh failed: ${e.toString()}')));
+      }
+    }
+  }
+
+  // --- Navigation Helpers ---
+  void _onBottomNavTapped(int index) {
+    // 0: Home (Current), 1: Advisory, 2: Community, 3: Claims, 4: Finance
+    switch (index) {
+      case 0:
+        // Already on Home
+        break;
+      case 1:
+        context.push('/advisory');
+        break;
+      case 2:
+        context.push('/community');
+        break;
+      case 3:
+        // Assuming route exists or showing placeholder
+        // context.push('/file-claim'); 
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Claims feature coming soon")));
+        break;
+      case 4:
+        context.push('/finance');
+        break;
     }
   }
 
@@ -50,119 +82,255 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final topPadding = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.green.shade100,
-              backgroundImage: const AssetImage('assets/farmer.png'),
-            ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(l10n.translate('welcome_back'), style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                Text(
-                  _userProfile?['name'] ?? "Farmer",
-                  style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
+      // Extend body behind app bar/status bar for the background image effect
+      extendBodyBehindAppBar: true,
+      backgroundColor: const Color(0xFFF2F2F2), // Light grey background like the image bottom
+      body: Stack(
+        children: [
+          // --- 1. Top Background Image ---
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 350, // Height of the background area
+            child: Container(
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage(_wheatImage),
+                  fit: BoxFit.cover,
                 ),
-              ],
+              ),
+              child: Container(
+                // Gradient overlay to make text readable
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.3),
+                      Colors.black.withOpacity(0.1),
+                      const Color(0xFFF2F2F2), // Fade into background color
+                    ],
+                  ),
+                ),
+              ),
             ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.black),
-            onPressed: () async { await _refreshFarms(context); },
           ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.black),
-            onPressed: () {},
+
+          // --- 2. Main Scrollable Content ---
+          SafeArea(
+            child: RefreshIndicator(
+              onRefresh: () async => await _refreshFarms(context),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 10),
+                    
+                    // --- Header (Greeting & Notification) ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                             CircleAvatar(
+                              radius: 22,
+                              backgroundImage: AssetImage(_wheatImage), // Using requested image
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  l10n.translate('welcome_back'), 
+                                  style: const TextStyle(color: Colors.white, fontSize: 14)
+                                ),
+                                Text(
+                                  _userProfile?['name'] ?? "Farmer",
+                                  style: const TextStyle(
+                                    color: Colors.white, 
+                                    fontWeight: FontWeight.bold, 
+                                    fontSize: 18
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        // Top Right Controls
+                        Row(
+                          children: [
+                             _glassIconButton(Icons.refresh, () => _refreshFarms(context)),
+                             const SizedBox(width: 8),
+                             _glassIconButton(Icons.notifications_none, () {}),
+                             const SizedBox(width: 8),
+                             _glassIconButton(Icons.logout, () => _handleLogout(context), color: Colors.redAccent),
+                          ],
+                        )
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // --- Weather Widget (Glassmorphism) ---
+                    _buildGlassWeatherCard(l10n),
+
+                    const SizedBox(height: 20),
+
+                    // --- Proactive Alert System (Matches Image) ---
+                    _buildProactiveAlerts(l10n),
+
+                    const SizedBox(height: 24),
+
+                    // --- "Our agriculture field" Header ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Our agriculture field",
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+                        ),
+                        // "View Map" button (Functionally Add Farm)
+                        ElevatedButton(
+                          onPressed: () async {
+                            if (!mounted || !context.mounted) return;
+                            final res = await context.push('/add-farm');
+                            if (mounted && res == true && context.mounted) {
+                              await _refreshFarms(context);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF4C6646), // Dark Green from image
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            l10n.translate('add_new'), // Using "Add New" loc string
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // --- Farm List ---
+                    FutureBuilder<List<Farm>>(
+                      future: _farmsFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
+                        }
+                        if (snapshot.hasError) {
+                          return Center(child: Text("Error: ${snapshot.error}"));
+                        }
+
+                        final farms = snapshot.data ?? [];
+                        if (farms.isEmpty) {
+                          return _buildEmptyState(l10n);
+                        }
+
+                        return ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: farms.length,
+                          padding: const EdgeInsets.only(bottom: 100), // Space for bottom nav
+                          itemBuilder: (ctx, index) => _buildFarmCard(context, farms[index], l10n),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
-            onPressed: () => _handleLogout(context),
+          
+          // --- Custom Bottom Navigation Bar ---
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _buildCustomBottomNav(context),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          setState(() {
-            _farmsFuture = ApiClient().getFarms();
-          });
-          await _farmsFuture;
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16.0),
+    );
+  }
+
+  // --- UI Components ---
+
+  Widget _glassIconButton(IconData icon, VoidCallback onTap, {Color color = Colors.white}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(50),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            color: Colors.white.withOpacity(0.2),
+            child: Icon(icon, color: color, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassWeatherCard(AppLocalizations l10n) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          color: Colors.white.withOpacity(0.15), // Glass effect
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- 1. Weather Widget ---
-              _buildWeatherCard(l10n),
-              
-              const SizedBox(height: 24),
-
-              // --- 2. Smart Farming Grid ---
-              Text(l10n.translate('smart_farming'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              _buildFeatureGrid(context, l10n),
-
-              const SizedBox(height: 24),
-
-              // --- 3. Farm Management ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(l10n.translate('my_farms'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  TextButton.icon(
-                    onPressed: () async {
-                      if (!mounted || !context.mounted) return;
-                      final res = await context.push('/add-farm');
-                      if (mounted && res == true && context.mounted) {
-                        await _refreshFarms(context);
-                      }
-                    },
-                    icon: const Icon(Icons.add_circle_outline, size: 18),
-                    label: Text(l10n.translate('add_new')),
-                    style: TextButton.styleFrom(foregroundColor: Colors.green.shade700),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                       Text(
+                        l10n.translate('todays_weather'), 
+                        style: const TextStyle(color: Colors.white70, fontSize: 14)
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        "16°C", 
+                        style: TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w500)
+                      ),
+                    ],
+                  ),
+                   const Column(
+                    children: [
+                      Icon(Icons.cloud_outlined, color: Colors.white, size: 28),
+                      SizedBox(height: 4),
+                      Text("Partly Cloudy", style: TextStyle(color: Colors.white, fontSize: 12)),
+                    ],
                   )
                 ],
               ),
-              
-              const SizedBox(height: 8),
-
-              // --- Farm List FutureBuilder ---
-              FutureBuilder<List<Farm>>(
-                future: _farmsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
-                  }
-                  
-                  if (snapshot.hasError) {
-                    return Center(child: Text("Error: ${snapshot.error}"));
-                  }
-
-                  final farms = snapshot.data ?? [];
-                  if (farms.isEmpty) {
-                    return _buildEmptyState(l10n);
-                  }
-
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: farms.length,
-                    itemBuilder: (ctx, index) => _buildFarmCard(context, farms[index], l10n),
-                  );
-                },
-              ),
+              const SizedBox(height: 16),
+              const Row(
+                children: [
+                  Icon(Icons.air, color: Colors.white70, size: 16),
+                  SizedBox(width: 4),
+                  Text("2.4 km/h", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  SizedBox(width: 16),
+                  Icon(Icons.water_drop_outlined, color: Colors.white70, size: 16),
+                  SizedBox(width: 4),
+                  Text("72.5%", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              )
             ],
           ),
         ),
@@ -170,83 +338,86 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildWeatherCard(AppLocalizations l10n) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.green.shade700, Colors.green.shade500],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: Colors.green.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 5)),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
+  Widget _buildProactiveAlerts(AppLocalizations l10n) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          color: Colors.white.withOpacity(0.4), // Slightly more opaque
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.translate('todays_weather'), style: const TextStyle(color: Colors.white70, fontSize: 14)),
-              const SizedBox(height: 5),
-              const Text("28°C", style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-              Text("${l10n.translate('sunny')} • Humidity 65%", style: const TextStyle(color: Colors.white, fontSize: 14)),
+               Row(
+                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                 children: [
+                   const Text(
+                    "Proactive Alert System",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+                   ),
+                   Icon(Icons.arrow_forward_ios, size: 14, color: Colors.black54),
+                 ],
+               ),
+               const SizedBox(height: 12),
+               SingleChildScrollView(
+                 scrollDirection: Axis.horizontal,
+                 child: Row(
+                   children: [
+                     _buildAlertCard(
+                       "Weather Alert", 
+                       "Heavy Rain imminent", 
+                       "Action Required", 
+                       Colors.grey.shade300
+                     ),
+                     const SizedBox(width: 12),
+                     _buildAlertCard(
+                       "Pest Outbreak", 
+                       "Aphids detected in Field B", 
+                       "View Details", 
+                       Colors.green.shade100
+                     ),
+                   ],
+                 ),
+               )
             ],
           ),
-          Icon(Icons.wb_sunny, color: Colors.yellow.shade400, size: 50),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildFeatureGrid(BuildContext context, AppLocalizations l10n) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.35, 
-      children: [
-        _buildFeatureCard(context, l10n.translate('advisory'), l10n.translate('ask_agribot'), Icons.chat_bubble_outline, Colors.blue, '/advisory'),
-        _buildFeatureCard(context, l10n.translate('community'), l10n.translate('discussion'), Icons.groups_outlined, Colors.orange, '/community'),
-        _buildFeatureCard(context, l10n.translate('finance'), l10n.translate('ledger'), Icons.account_balance_wallet_outlined, Colors.purple, '/finance'),
-        _buildFeatureCard(context, l10n.translate('profile'), l10n.translate('bank_land'), Icons.person_outline, Colors.teal, '/profile'),
-      ],
-    );
-  }
-
-  Widget _buildFeatureCard(BuildContext context, String title, String subtitle, IconData icon, Color color, String route) {
-    return GestureDetector(
-      onTap: () => context.push(route),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(color: Colors.grey.withValues(alpha: 0.05), blurRadius: 5, offset: const Offset(0, 2)),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const Spacer(),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            Text(subtitle, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-          ],
-        ),
+  Widget _buildAlertCard(String title, String subtitle, String action, Color btnColor) {
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+           Text.rich(
+             TextSpan(
+               text: "$title: ",
+               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+               children: [
+                 TextSpan(text: subtitle, style: const TextStyle(fontWeight: FontWeight.normal))
+               ]
+             )
+           ),
+           const SizedBox(height: 12),
+           Container(
+             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+             decoration: BoxDecoration(
+               color: btnColor,
+               borderRadius: BorderRadius.circular(12),
+             ),
+             child: Text(action, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+           )
+        ],
       ),
     );
   }
@@ -266,56 +437,116 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFFF7F4F2), // Slightly off-white/beige from image
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: Colors.grey.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 4)),
+            BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2)),
           ],
         ),
         child: Row(
           children: [
+            // Farm Image
             ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 70, height: 70, color: Colors.green.shade100,
-                child: const Icon(Icons.agriculture, color: Colors.green),
+              borderRadius: BorderRadius.circular(16),
+              child: Image.asset(
+                _wheatImage,
+                width: 70, 
+                height: 70, 
+                fit: BoxFit.cover
               ),
             ),
             const SizedBox(width: 16),
+            // Details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(farm.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(
+                    farm.name, 
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)
+                  ),
+                  const SizedBox(height: 4),
+                  const Text("Area: 6.2 ha", style: TextStyle(color: Colors.grey, fontSize: 12)),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.location_on, size: 14, color: Colors.grey.shade500),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          farm.address, 
-                          style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                      const Text("Status: ", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      Text(l10n.translate('active'), style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
                     ],
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(l10n.translate('active'), style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            // Menu Icon
+            Icon(Icons.more_vert, size: 20, color: Colors.grey.shade600),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- Custom Bottom Navigation Bar ---
+  Widget _buildCustomBottomNav(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))
+        ]
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildNavIcon(Icons.home_filled, "Home", 0, isActive: true),
+            _buildNavIcon(Icons.spa_outlined, "Advisory", 1),
+            // Central Camera Button (Community/Scan)
+            GestureDetector(
+               onTap: () => _onBottomNavTapped(2), // Community
+               child: Container(
+                 width: 50, height: 50,
+                 decoration: BoxDecoration(
+                   color: const Color(0xFF4C6646), // Dark green
+                   shape: BoxShape.circle,
+                   boxShadow: [
+                     BoxShadow(color: Colors.green.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
+                   ]
+                 ),
+                 child: const Icon(Icons.groups_outlined, color: Colors.white),
+               ),
+            ),
+            _buildNavIcon(Icons.description_outlined, "Claims", 3),
+            _buildNavIcon(Icons.account_balance_wallet_outlined, "Finance", 4), // Changed to person/finance
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavIcon(IconData icon, String label, int index, {bool isActive = false}) {
+    return GestureDetector(
+      onTap: () => _onBottomNavTapped(index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon, 
+            color: isActive ? const Color(0xFF4C6646) : Colors.grey, 
+            size: 24
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label, 
+            style: TextStyle(
+              color: isActive ? const Color(0xFF4C6646) : Colors.grey, 
+              fontSize: 10,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal
+            )
+          )
+        ],
       ),
     );
   }

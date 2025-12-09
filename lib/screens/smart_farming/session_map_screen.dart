@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -16,14 +17,14 @@ class SessionMapScreen extends StatefulWidget {
 
 class _SessionMapScreenState extends State<SessionMapScreen> {
   final MapController _mapController = MapController();
+  bool _isLocating = false; // or true, depending on your default
   Position? _currentPosition;
-  bool _isLocating = true;
   bool _isDevMode = false;
   StreamSubscription<Position>? _positionStream;
 
   // --- MOCK DATA (Replace with API later) ---
   // Create 2 targets near the user's mock location for testing
-  List<SamplingBlock> _blocks = [
+  final List<SamplingBlock> _blocks = [
     SamplingBlock(
       id: '1',
       center: LatLng(28.4501, 77.2864), // Near T-Block
@@ -62,7 +63,7 @@ class _SessionMapScreenState extends State<SessionMapScreen> {
     _positionStream = Geolocator.getPositionStream(locationSettings: settings).listen((Position position) {
   // If the accuracy is worse than 20 meters, ignore the jump
   if (position.accuracy > 20.0) {
-    print("GPS Signal Weak: ${position.accuracy}m - Ignoring update");
+    log("GPS Signal Weak: ${position.accuracy}m - Ignoring update");
     return; 
   }
 
@@ -140,11 +141,11 @@ class _SessionMapScreenState extends State<SessionMapScreen> {
                           width: isSelected ? 50 : 30, // Selected = Bigger
                           height: isSelected ? 50 : 30,
                           decoration: BoxDecoration(
-                            color: isCompleted
-                                ? Colors.green.withOpacity(0.3)
+                              color: isCompleted
+                                ? Colors.green.withAlpha((0.3 * 255).round())
                                 : (isSelected
-                                    ? Colors.blue.withOpacity(0.3)
-                                    : Colors.red.withOpacity(0.3)),
+                                  ? Colors.blue.withAlpha((0.3 * 255).round())
+                                  : Colors.red.withAlpha((0.3 * 255).round())),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: isCompleted ? Colors.green : Colors.red,
@@ -224,7 +225,7 @@ class _SessionMapScreenState extends State<SessionMapScreen> {
         const Text("Dev Mode", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
         Switch(
           value: _isDevMode,
-          activeColor: Colors.orange,
+          activeThumbColor: Colors.orange,
           onChanged: (val) {
             setState(() {
               _isDevMode = val;

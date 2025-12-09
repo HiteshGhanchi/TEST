@@ -1,3 +1,4 @@
+import 'dart:ui'; // Required for ImageFilter
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../api/api_client.dart';
@@ -15,6 +16,9 @@ class FarmDetailsScreen extends StatefulWidget {
 class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
   late Future<Farm> _farmFuture;
   String _cropName = "Loading...";
+  
+  // Asset path constant matching Home Screen
+  final String _wheatImage = 'assets/wheat1.jpg';
 
   @override
   void initState() {
@@ -59,168 +63,222 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      body: FutureBuilder<Farm>(
-        future: _farmFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                  const SizedBox(height: 16),
-                  Text("Error loading farm: ${snapshot.error}"),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _loadFarmDetails,
-                    child: const Text("Retry"),
-                  )
-                ],
+      extendBodyBehindAppBar: true,
+      backgroundColor: const Color(0xFFF2F2F2), // Light grey background
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          child: _glassIconButton(Icons.arrow_back, () => context.pop()),
+        ),
+      ),
+      body: Stack(
+        children: [
+          // --- 1. Top Background Image ---
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 350,
+            child: Container(
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage(_wheatImage),
+                  fit: BoxFit.cover,
+                ),
               ),
-            );
-          }
-
-          final farm = snapshot.data!;
-
-          return SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ---------- TOP CARD ----------
-                Container(
-                  margin: const EdgeInsets.all(18),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade700,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.green.withValues(alpha: 0.25),
-                        blurRadius: 18,
-                        offset: const Offset(0, 6),
-                      ),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.4),
+                      Colors.black.withOpacity(0.1),
+                      const Color(0xFFF2F2F2), // Fade into background
                     ],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Back Button
-                      GestureDetector(
-                        onTap: () => context.pop(),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.arrow_back, color: Colors.white),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
+                ),
+              ),
+            ),
+          ),
 
+          // --- 2. Main Content ---
+          SafeArea(
+            bottom: false,
+            child: FutureBuilder<Farm>(
+              future: _farmFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.white));
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text("Error loading farm: ${snapshot.error}"),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadFarmDetails,
+                          child: const Text("Retry"),
+                        )
+                      ],
+                    ),
+                  );
+                }
+
+                final farm = snapshot.data!;
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      
+                      // Title Text
                       Text(
                         farm.name,
                         style: const TextStyle(
-                          fontSize: 26,
+                          fontSize: 28,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-
-                      const SizedBox(height: 6),
-
+                      const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.grass, color: Colors.white70, size: 18),
-                          const SizedBox(width: 6),
+                          const Icon(Icons.location_on, color: Colors.white70, size: 16),
+                          const SizedBox(width: 4),
                           Text(
-                            _cropName,
-                            style: const TextStyle(color: Colors.white70, fontSize: 15),
+                            farm.address,
+                            style: const TextStyle(color: Colors.white70, fontSize: 14),
                           ),
                         ],
                       ),
 
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 24),
 
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on, color: Colors.white70, size: 18),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              farm.address,
-                              style: const TextStyle(color: Colors.white70, fontSize: 14),
-                              overflow: TextOverflow.ellipsis,
+                      // --- Glassmorphic Farm Details Card ---
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: Container(
+                            padding: const EdgeInsets.all(20),
+                            color: Colors.white.withOpacity(0.2), // Glass effect
+                            child: Row(
+                              children: [
+                                // Crop Icon Box
+                                Container(
+                                  width: 60, height: 60,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: const Icon(Icons.grass, color: Colors.white, size: 30),
+                                ),
+                                const SizedBox(width: 16),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text("Current Crop", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _cropName,
+                                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                        ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      // --- Action Buttons Grid ---
+                      Expanded(
+                        child: GridView.count(
+                          padding: const EdgeInsets.only(top: 10, bottom: 40),
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: 1.1,
+                          children: [
+                            _buildActionTile(
+                              title: "Weekly Update",
+                              subtitle: "Click Photo",
+                              icon: Icons.camera_alt,
+                              themeColor: const Color(0xFF4C6646), // Dark Green
+                              onTap: () {
+                                 // Logic Preserved
+                                 context.push('/camera/${widget.farmId}');
+                              }
+                            ),
+                            _buildActionTile(
+                              title: "Damage Report",
+                              subtitle: "Report Issue",
+                              icon: Icons.warning_amber_rounded,
+                              themeColor: Colors.orange.shade700, // Ochre
+                              onTap: () {
+                                // Logic Preserved
+                                context.push('/session-map/${widget.farmId}');
+                              },
+                            ),
+                            _buildActionTile(
+                              title: "Past Reports",
+                              subtitle: "View History",
+                              icon: Icons.history,
+                              themeColor: const Color(0xFF4C6646), // Dark Green
+                              onTap: () {
+                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("History coming soon")));
+                              },
+                            ),
+                            _buildActionTile(
+                              title: "Analytics",
+                              subtitle: "Farm Insights",
+                              icon: Icons.analytics_outlined,
+                              themeColor: Colors.orange.shade700, // Ochre
+                              onTap: () {
+                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Analytics coming soon")));
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // ---------- ACTION BUTTONS ----------
-                Expanded(
-                  child: GridView.count(
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 18,
-                    mainAxisSpacing: 18,
-                    childAspectRatio: 1,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      _buildActionTile(
-                        title: "Weekly Update",
-                        subtitle: "Click Photo",
-                        icon: Icons.camera_alt,
-                        color: Colors.green.shade700,
-                        onTap: () {
-                           // Navigates to the route defined in router.dart
-                           // Ensure router.dart maps '/camera/:farmId' to SmartCameraScreen
-                           context.push('/camera/${widget.farmId}');
-                        }
-                      ),
-                      _buildActionTile(
-                        title: "Damage Report",
-                        subtitle: "Report Issue",
-                        icon: Icons.report_gmailerrorred_rounded,
-                        color: Colors.red.shade600,
-                        onTap: () {
-                          context.push('/session-map/${widget.farmId}');
-                        },
-                      ),
-                      _buildActionTile(
-                        title: "Past Reports",
-                        subtitle: "View History",
-                        icon: Icons.history,
-                        color: Colors.blue.shade700,
-                        onTap: () {
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("History coming soon")));
-                        },
-                      ),
-                      _buildActionTile(
-                        title: "Analytics",
-                        subtitle: "Farm Insights",
-                        icon: Icons.analytics_outlined,
-                        color: Colors.orange.shade700,
-                        onTap: () {
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Analytics coming soon")));
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- UI Components ---
+
+  Widget _glassIconButton(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(50),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            color: Colors.white.withOpacity(0.2),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+        ),
       ),
     );
   }
@@ -229,19 +287,19 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
     required String title,
     required String subtitle,
     required IconData icon,
-    required Color color,
+    required Color themeColor,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
           color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: color.withValues(alpha: 0.15),
-              blurRadius: 12,
+              color: Colors.grey.withOpacity(0.08),
+              blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],
@@ -250,17 +308,17 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
+                color: themeColor.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: color, size: 34),
+              child: Icon(icon, color: themeColor, size: 32),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             Text(
               title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
             const SizedBox(height: 4),
             Text(
