@@ -24,13 +24,16 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
   final MapController _mapController = MapController();
 
   bool _isLoading = false;
+
+  /// 🔥 IMPORTANT: Load only the crops list (not whole response)
   late Future<List<Map<String, dynamic>>> _cropsFuture;
+
   LatLng _initialCenter = const LatLng(20.5937, 78.9629);
 
   @override
   void initState() {
     super.initState();
-    _cropsFuture = ApiClient().getCrops();
+    _cropsFuture = ApiClient().getCrops();     // <--- FIXED
     _determinePosition();
   }
 
@@ -87,7 +90,6 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Farm Added Successfully!")));
-        // Return to previous screen and signal success so callers can refresh
         context.pop(true);
       }
     } catch (e) {
@@ -118,7 +120,6 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
       ),
       body: Stack(
         children: [
-          // --- 1. Full Screen Map ---
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -152,7 +153,6 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
             ],
           ),
 
-          // --- 2. Floating Controls ---
           Positioned(
             top: 100,
             right: 16,
@@ -175,7 +175,6 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
             ),
           ),
 
-          // --- 3. Bottom Form Panel ---
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -193,7 +192,7 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
                   children: [
                     const Text("New Farm Details", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
-                    
+
                     TextFormField(
                       controller: _nameController,
                       decoration: InputDecoration(
@@ -207,7 +206,7 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                     TextFormField(
+                    TextFormField(
                       controller: _addressController,
                       decoration: InputDecoration(
                         labelText: 'Address',
@@ -233,20 +232,23 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
                         if (snapshot.hasError) {
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Text("Error loading crops: ${snapshot.error}", style: const TextStyle(color: Colors.red)),
+                            child: Text(
+                              "Error loading crops: ${snapshot.error}",
+                              style: const TextStyle(color: Colors.red),
+                            ),
                           );
                         }
 
                         final crops = snapshot.data ?? [];
                         if (crops.isEmpty) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: const Text("No crops available", style: TextStyle(color: Colors.orange)),
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Text("No crops available", style: TextStyle(color: Colors.orange)),
                           );
                         }
 
                         return DropdownButtonFormField<String>(
-                          initialValue: _selectedCropId,
+                          value: _selectedCropId,
                           decoration: InputDecoration(
                             labelText: 'Select Crop',
                             filled: true,
@@ -255,15 +257,13 @@ class _AddFarmScreenState extends State<AddFarmScreen> {
                             prefixIcon: const Icon(Icons.grass, color: Colors.blue),
                           ),
                           items: crops.map((crop) {
-                            final id = crop['id']?.toString() ?? '';
-                            final name = crop['name']?.toString() ?? 'Unknown Crop';
                             return DropdownMenuItem<String>(
-                              value: id,
-                              child: Text(name),
+                              value: crop['id'],
+                              child: Text(crop['name']),
                             );
                           }).toList(),
                           onChanged: (val) => setState(() => _selectedCropId = val),
-                          validator: (v) => v == null || v.isEmpty ? 'Please select a crop' : null,
+                          validator: (v) => v == null ? 'Please select a crop' : null,
                         );
                       },
                     ),
