@@ -1,74 +1,56 @@
 import 'dart:io';
-import 'dart:math';
 import 'package:image/image.dart' as img;
-import 'package:tflite_flutter/tflite_flutter.dart';
 
 class MLService {
   static final MLService _instance = MLService._internal();
   factory MLService() => _instance;
   MLService._internal();
 
-  Interpreter? _interpreter;
-
-  bool get isModelLoaded => _interpreter != null;
-
-  /// Initialize the model (Call this in main.dart or Splash)
-  Future<void> loadModel() async {
+  /// Calculates the Laplacian Variance of an image.
+  /// A lower variance indicates less edge detail (blurrier).
+  /// A threshold of ~100-300 is common, but depends on resolution/lighting.
+  Future<bool> isBlurry(String imagePath, {double threshold = 150.0}) async {
     try {
-      // Ensure you add 'assets/model.tflite' and 'assets/labels.txt' to pubspec
-      _interpreter = await Interpreter.fromAsset('assets/model.tflite');
-      // _labels = await FileUtil.loadLabels('assets/labels.txt'); // If you have labels
-    } catch (e) {
-      // Silently fail - using Mock Mode
-    }
-  }
+      // 1. Read Image
+      final bytes = await File(imagePath).readAsBytes();
+      final image = img.decodeImage(bytes);
+      if (image == null) return true; // Fail safe
 
-  /// Validates if the image contains a crop/field
-  /// Returns a confidence score (0.0 to 1.0)
-  Future<double> validateCropImage(String imagePath) async {
-    if (_interpreter == null) {
-      return _mockValidation(); // Fallback for testing
-    }
+      // 2. Resize to speed up calculation (processing full res is slow)
+      final resized = img.copyResize(image, width: 500);
 
-    // --- REAL ML LOGIC (Standard MobileNet Input) ---
-    try {
-      // 1. Read and Resize Image
-      final imageData = File(imagePath).readAsBytesSync();
-      final image = img.decodeImage(imageData);
-      if (image == null) return 0.0;
-      
-      final resized = img.copyResize(image, width: 224, height: 224);
+      // 3. Convert to Grayscale
+      final grayscale = img.grayscale(resized);
 
-      // 2. Convert to input array [1, 224, 224, 3]
-      var input = List.generate(1, (i) => 
-        List.generate(224, (y) => 
-          List.generate(224, (x) => 
-            List.generate(3, (c) {
-              var pixel = resized.getPixel(x, y);
-              // Basic normalization (0-1 float)
-              return pixel[c].toDouble() / 255.0; 
-            })
-          )
-        )
-      );
+      // 4. Apply Laplacian Kernel
+      // [ 0, -1,  0]
+      // [-1,  4, -1]
+      // [ 0, -1,  0]
+      final laplacian = img.convolution(grayscale, filter: [0, -1, 0, -1, 4, -1, 0, -1, 0]);
 
-      // 3. Run Inference
-      // Assuming output is [1, 1] (probability of being a crop)
-      var output = List.filled(1 * 1, 0.0).reshape([1, 1]); 
-      _interpreter!.run(input, output);
+      // 5. Calculate Variance
+      double sum = 0.0;
+      double sumSq = 0.0;
+      int count = 0;
 
-      return output[0][0]; // Return confidence
+      // Iterate through pixels to calculate statistical variance
+      for (var pixel in laplacian) {
+        // Since it's grayscale, r, g, and b are the same. We use r (red channel).
+        final val = pixel.r.toDouble(); 
+        sum += val;
+        sumSq += val * val;
+        count++;
+      }
+
+      final mean = sum / count;
+      final variance = (sumSq / count) - (mean * mean);
+
+      // If variance is less than threshold, it is blurry
+      return variance < threshold;
 
     } catch (e) {
-      return 0.5; // Neutral score on error
+      // If something goes wrong, assume it's bad to force retake
+      return true;
     }
-  }
-
-  // --- MOCK LOGIC (For testing without .tflite file) ---
-  Future<double> _mockValidation() async {
-    await Future.delayed(const Duration(milliseconds: 1500)); // Simulate processing
-    // Return a random high confidence to simulate "Success" most of the time
-    // In real testing, return 0.1 to test "Failure" cases
-    return 0.85 + (Random().nextDouble() * 0.15);
   }
 }

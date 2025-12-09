@@ -57,34 +57,31 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
       final image = await _controller!.takePicture();
       final req = _requirements[_currentReqIndex];
 
-      // --- SMART VALIDATION (Simulated) ---
-      // 1. Geo-tag Check (Mocked)
-      // 2. Blur Check (Mocked)
-      // 3. Content Check (Wide vs Macro)
-      double confidence = await MLService().validateCropImage(image.path);
-      
-      // Specific check based on requirement type
-      bool isValid = confidence > 0.7;
-      // If Macro is required but confidence is low (simulating wide shot), fail
-      if (req.isMacro && confidence < 0.6) isValid = false; 
+      // --- 1. BLUR DETECTION ---
+      // We only do this check now.
+      bool isBlurry = await MLService().isBlurry(image.path);
+      if (isBlurry) {
+        _showErrorDialog("Blurry Image", "The photo is too blurry. Please hold steady and try again.");
+        setState(() => _isProcessing = false);
+        return;
+      }
 
-      if (isValid) {
-        _photosTakenInCurrentReq++;
-        
-        // Check if we need to move to next requirement
-        if (_photosTakenInCurrentReq >= req.count) {
-          _currentReqIndex++;
-          _photosTakenInCurrentReq = 0;
-        }
-        
-        // Check if session is complete
-        if (_currentReqIndex >= _requirements.length) {
-           _finishSession();
-        } else {
-           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Photo Saved! Next one...")));
-        }
+      // --- 2. PROCEED (Validation Removed) ---
+      // If not blurry, we accept the photo immediately.
+      
+      _photosTakenInCurrentReq++;
+      
+      // Check if we need to move to next requirement
+      if (_photosTakenInCurrentReq >= req.count) {
+        _currentReqIndex++;
+        _photosTakenInCurrentReq = 0;
+      }
+      
+      // Check if session is complete
+      if (_currentReqIndex >= _requirements.length) {
+          _finishSession();
       } else {
-         _showErrorDialog("Poor Quality", "Please ensure the image is clear and matches the guide (${req.isMacro ? 'Close-up' : 'Wide View'}).");
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Photo Saved! Next one...")));
       }
 
     } catch (e) {

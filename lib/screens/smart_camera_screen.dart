@@ -1,10 +1,10 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:geolocator/geolocator.dart'; // Added for GPS
+import 'package:geolocator/geolocator.dart';
 import '../services/ml_service.dart';
 import '../data/crop_standards.dart';
-import '../api/api_client.dart'; // Added for Real Data
+import '../api/api_client.dart';
 
 class SmartCameraScreen extends StatefulWidget {
   final String farmId;
@@ -17,7 +17,7 @@ class SmartCameraScreen extends StatefulWidget {
 class _SmartCameraScreenState extends State<SmartCameraScreen> {
   CameraController? _controller;
   bool _isProcessing = false;
-  bool _isLoading = true; // Added to show loading state while fetching farm
+  bool _isLoading = true;
   
   // GPS State
   Position? _currentPosition;
@@ -32,20 +32,14 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
   void initState() {
     super.initState();
     _initCamera();
-    _startHighAccuracyLocation(); // Start GPS
-    _loadRequirements(); // Fetch Farm Data
+    _startHighAccuracyLocation();
+    _loadRequirements();
   }
   
-  // --- 1. API INTEGRATION: Fetch Farm & Requirements ---
   Future<void> _loadRequirements() async {
     try {
-      // Fetch real farm data from API instead of MockDatabase
       await ApiClient().getFarmById(widget.farmId);
-      
-      // Calculate crop stage (Mocking Week 5 for demo as sowingDate might be missing in API)
-      // In production: int week = DateTime.now().difference(farm.sowingDate).inDays ~/ 7;
       const int mockCurrentWeek = 5; 
-      
       final stage = CropStandard.getStage(mockCurrentWeek);
       
       if (mounted) {
@@ -62,10 +56,8 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
     }
   }
 
-  // --- 2. GPS LOGIC (From your camera_screen.dart) ---
   Future<void> _startHighAccuracyLocation() async {
     setState(() => _isLocating = true);
-
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -79,7 +71,7 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
       final LocationSettings locationSettings = const LocationSettings(accuracy: LocationAccuracy.bestForNavigation);
       _currentPosition = await Geolocator.getCurrentPosition(locationSettings: locationSettings);
     } catch (e) {
-      // Handle error or retry
+      // Handle error
     } finally {
       if (mounted) setState(() => _isLocating = false);
     }
@@ -110,7 +102,7 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
     // --- GPS CHECK ---
     if (_currentPosition == null) {
       _showErrorDialog("Location Required", "Acquiring high-accuracy GPS. Please wait...");
-      await _startHighAccuracyLocation(); // Retry
+      await _startHighAccuracyLocation();
       if (_currentPosition == null) return;
     }
 
@@ -120,19 +112,26 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
       final image = await _controller!.takePicture();
       final req = _requirements[_currentReqIndex];
 
-      // --- SMART VALIDATION ---
-      double confidence = await MLService().validateCropImage(image.path);
-      
-      // Check: Is it a crop? Is it blurred?
-      bool isValid = confidence > 0.6; // Lowered threshold slightly for usability
-      
-      // Check: Macro vs Wide requirements
-      if (req.isMacro && confidence < 0.5) isValid = false; 
+      // --- BLUR CHECK (Laplacian) ---
+      // We do this BEFORE accepting the photo.
+      bool isBlurry = await MLService().isBlurry(image.path);
 
-      if (isValid) {
+      if (isBlurry) {
+        // If blurry, show warning and DO NOT proceed.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text("Image is too blurry! Please hold steady."),
+              backgroundColor: Colors.red.shade700,
+              duration: const Duration(seconds: 2),
+            )
+          );
+        }
+      } else 
+      {
+        // Image is sharp, proceed with saving logic
         _photosTakenInCurrentReq++;
         
-        // --- LOGIC: Move to next requirement ---
         if (_photosTakenInCurrentReq >= req.count) {
           setState(() {
             _currentReqIndex++;
@@ -140,16 +139,13 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
           });
         }
         
-        // --- LOGIC: Check if session complete ---
         if (_currentReqIndex >= _requirements.length) {
            _finishSession();
         } else {
            if(mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Photo Verified & Saved! Next one..."), duration: Duration(seconds: 1)));
+             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Photo Sharp & Saved! Next one..."), duration: Duration(seconds: 1)));
            }
         }
-      } else {
-         _showErrorDialog("Quality Check Failed", "Please ensure the image is clear and matches the guide (${req.isMacro ? 'Close-up' : 'Wide View'}).");
       }
 
     } catch (e) {
@@ -169,8 +165,8 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(ctx).pop(); // Close dialog
-              context.go('/home');     // Go to home
+              Navigator.of(ctx).pop();
+              context.go('/home');
             },
             child: const Text("Done"),
           )
@@ -185,12 +181,10 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Show loading if camera not ready OR if farm data still fetching
     if (_controller == null || !_controller!.value.isInitialized || _isLoading) {
       return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator(color: Colors.white)));
     }
 
-    // Session over safety check
     if (_currentReqIndex >= _requirements.length) return Container(color: Colors.black); 
     
     final req = _requirements[_currentReqIndex];
@@ -202,14 +196,11 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
         children: [
           Center(child: CameraPreview(_controller!)),
           
-          // --- OVERLAY GUIDES ---
           if (req.isMacro)
              Center(child: Container(width: 250, height: 250, decoration: BoxDecoration(border: Border.all(color: Colors.yellow, width: 2), borderRadius: BorderRadius.circular(12))))
           else
-             // Grid for wide shots
              Column(children: [Expanded(child: Container(decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.3)))))), Expanded(child: Container())]),
 
-          // --- GPS STATUS INDICATOR ---
           Positioned(
             top: 50, left: 0, right: 0,
             child: Center(
@@ -231,7 +222,6 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
             ),
           ),
 
-          // --- BOTTOM INSTRUCTIONS ---
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: Container(
@@ -262,7 +252,6 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
             ),
           ),
 
-          // --- CLOSE BUTTON ---
            Positioned(
             top: 40,
             left: 20,

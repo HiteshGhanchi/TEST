@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/api_client.dart';
 import '../../data/capture_data.dart';
+import '../../services/ml_service.dart'; // Import MLService
 
 class BlockCameraScreen extends StatefulWidget {
   const BlockCameraScreen({super.key});
@@ -38,6 +39,22 @@ class _BlockCameraScreenState extends State<BlockCameraScreen> {
     try {
       final image = await _controller!.takePicture();
 
+      // --- BLUR DETECTION ADDED HERE ---
+      bool isBlurry = await MLService().isBlurry(image.path);
+      if (isBlurry) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text("Image is too blurry. Please hold steady."),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
+        setState(() => _isProcessing = false);
+        return; // Stop execution if blurry
+      }
+      // ---------------------------------
+
       // Create a minimal CaptureData and call presignUpload immediately.
       // NOTE: Replace captureLat/captureLon with real GPS when available.
       final capture = CaptureData(
@@ -72,6 +89,9 @@ class _BlockCameraScreenState extends State<BlockCameraScreen> {
         }
       }
     } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
       setState(() => _isProcessing = false);
     }
   }
