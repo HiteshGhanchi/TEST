@@ -193,7 +193,7 @@ class _FarmDetailsScreenState extends State<FarmDetailsScreen> {
                         icon: Icons.report_gmailerrorred_rounded,
                         color: Colors.red.shade600,
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Damage Reporting coming soon")));
+                          context.push('/session-map/${widget.farmId}');
                         },
                       ),
                       _buildActionTile(

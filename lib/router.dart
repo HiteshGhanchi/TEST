@@ -15,6 +15,9 @@ import 'package:myapp/screens/smart_farming/finance_ledger_screen.dart';
 import 'package:myapp/screens/advisory/advisory_chat_screen.dart';
 import 'package:myapp/screens/profile_setup/profile_setup_screen.dart';
 
+import 'package:myapp/screens/smart_farming/session_map_screen.dart';
+import 'package:myapp/screens/sampling/block_camera_screen.dart';
+
 final GoRouter router = GoRouter(
   initialLocation: '/',
   routes: [
@@ -87,6 +90,14 @@ final GoRouter router = GoRouter(
     GoRoute(
       path: '/camera/:farmId',
       builder: (context, state) => SmartCameraScreen(farmId: state.pathParameters['farmId']!),
+    ),
+    GoRoute(
+      path: '/session-map/:farmId',
+      builder: (context, state) => SessionMapScreen(farmId: state.pathParameters['farmId']!),
+    ),
+    GoRoute(
+      path: '/block-camera',
+      builder: (context, state) => const BlockCameraScreen(),
     ),
   ],
 );

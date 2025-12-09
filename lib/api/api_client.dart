@@ -8,7 +8,7 @@ import '../data/capture_data.dart';
 import '../models/farm_model.dart';
 
 // Ensure this matches your backend IP (LAN IP for physical device testing)
-const String _baseUrl = 'http://10.126.107.30:4000/api';
+const String _baseUrl = 'http://172.20.10.2:4000/api';
 
 class ApiClient {
   // Singleton Pattern
